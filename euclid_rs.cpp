@@ -7,6 +7,17 @@ using namespace std;
 
 typedef vector<uint8_t> poly;
 
+//r−1(x) ← a(x); r0(x) ← b(x);
+//s−1(x) ← 1; s0(x) ← 0;
+// t−1(x) ← 0; t0(x) ← 1;
+// for (i ← 1; ri−1(x) ̸= 0; i++) {
+// qi(x) ← ri−2(x) div ri−1(x);
+// ri(x) ← ri−2(x) − qi(x) ri−1(x);
+// si(x) ← si−2(x) − qi(x) si−1(x);
+// ti(x) ← ti−2(x) − qi(x)ti−1(x);
+// }
+
+
 // Elimina ceros a la izquierda
 void poly_trim(poly &p) {
     while (!p.empty() && p.back() == 0) {
