@@ -12,26 +12,24 @@ using namespace std;
 #define R 8
 #define N 64
 
-bool leerArchivoPorBloques(const string& nombreArchivo, int tamanioBloque, vector<vector<int>>& bloques) {
-    ifstream archivo(nombreArchivo);
+bool leerArchivoBinarioPorBloques(const string& nombreArchivo, int tamanioBloque,
+                                  vector<vector<uint8_t>>& bloques) {
+    ifstream archivo(nombreArchivo, ios::binary);
     if (!archivo.is_open()) {
-        cerr << "No se pudo abrir el archivo: " << nombreArchivo << endl;
+        cerr << "No se pudo abrir el archivo binario: " << nombreArchivo << endl;
         return false;
     }
 
-    int simbolo;
-    vector<int> bloqueActual;
-
-    while (archivo >> simbolo) {
-        bloqueActual.push_back(simbolo);
-        if (bloqueActual.size() == tamanioBloque) {
-            bloques.push_back(bloqueActual);
-            bloqueActual.clear();
-        }
+    vector<uint8_t> bloqueActual(tamanioBloque);
+    while (archivo.read(reinterpret_cast<char*>(bloqueActual.data()), tamanioBloque)) {
+        bloques.push_back(bloqueActual);
     }
 
-    // Si quedaron símbolos sin completar el último bloque
-    if (!bloqueActual.empty()) {
+    // Si quedan bytes sueltos al final
+    streamsize bytesRestantes = archivo.gcount();
+    if (bytesRestantes > 0) {
+        bloqueActual.resize(bytesRestantes);
+        archivo.read(reinterpret_cast<char*>(bloqueActual.data()), bytesRestantes); 
         bloques.push_back(bloqueActual);
     }
 
@@ -68,10 +66,12 @@ int main() {
     resultado = ejecutarComando("utils\\Windows\\brstchannel.exe --fieldsize 256 --delta 0.75 --rho 0.01 test_files/test_codificado.rse");
     printf("Se simula el paso por un canal ruidoso con comando: utils\\Windows\\brstchannel.exe --fieldsize 256 --delta 0.75 --rho 0.01 test_files/test_codificado.rse\n");
     // 4. Leer archivo con errores
-    vector<vector<int>> bloques;
-    if (leerArchivoPorBloques("test_files/test_ruidoso.rse", 64, bloques)) {
+    vector<vector<uint8_t>> bloques;
+    printf("Se lee el archivo en: test_files/test_codificado.brst para ver si hubo error: \n");
+    if (leerArchivoBinarioPorBloques("test_files/test_codificado.brst", N, bloques)) {
         for (const auto& bloque : bloques) {
-            vector<int> resultado = decodificador(bloque, 64, 48);
+            string res = decodificador(bloque, N, K);
+            cout << res;
     }
 }
     return 0;
