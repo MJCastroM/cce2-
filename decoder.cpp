@@ -2,6 +2,7 @@
 #include "gf256.h"
 #include <fstream>
 #include <iostream>
+#include <algorithm>
 using namespace std;
 typedef vector<uint8_t> poly;
 
@@ -12,7 +13,7 @@ void compute_syndromes(const vector<uint8_t> r, int num_syndromes, vector<uint8_
         uint8_t sum = 0;
         int largo_bloque = r.size();
         for (int j = 0; j < largo_bloque; j++) {
-            uint8_t power = gfpow(2, (i+1)*j);  // α^{i·j}
+            uint8_t power = gfpow(2, (i+1)*j);  // α^{i+1·j}
             uint8_t term  = gfmul(r[j], power);
             sum = gfadd(sum, term);
         }
@@ -106,16 +107,19 @@ void euclid(const poly &a, const poly &b, int max_deg, poly &sigma, poly &omega)
     poly_trim(omega);
 }
 
-// Debug: imprimir polinomio
 void print_poly(const poly &p, const char *name) {
     printf("%s(x) = ", name);
+    bool first = true;
     for (int i = p.size() - 1; i >= 0; --i) {
         if (p[i] != 0) {
-            printf("%s0x%02X·x^%d ", (i != (int)p.size() - 1 ? "+ " : ""), p[i], i);
+            if (!first) printf("+ ");
+            printf("0x%02X*x^%d ", p[i], i);
+            first = false;
         }
     }
     printf("\n");
 }
+
 
 // Evaluación de un polinomio p(x) en x usando Horner sobre GF(256)
 uint8_t poly_eval(const poly &p, uint8_t x) {
@@ -189,7 +193,13 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
     if (error) {
         poly pol_loc_err, pol_ev_err;
         poly a((N-K), 0); a.back() = 1; // a(x) = x^{d-1}
+        print_poly(a, "a:");
+        for(int i = 0 ; i<8; i++) {
+            cout << "S[" << i << "]= " << sindromes[i] << endl;
+        }
         euclid(a, sindromes, sindromes.size() - 1, pol_loc_err, pol_ev_err);
+        print_poly(pol_loc_err, "pol_loc_err:");
+        print_poly(pol_ev_err, "pol_ev_err:");
         vector<int> error_positions = chien_search(pol_loc_err, K);
         cout << "Se detectaron " << error_positions.size() << " errores\n";
         for (int i : error_positions) {
@@ -206,12 +216,10 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
         if (!error2 && sindromes_post[i] != 0) {
             error2 = true;
         }}
-        if (error2)
-            cout << "No se corrigio" << endl;
-        else 
-            cout << "Se corrigio" << endl;
-    
     }
+    for(int i = 0 ; i<8; i++) {
+            cout << "S[" << i << "]= " << sindromes[i] << endl;
+        }
     return bloque_con_ruido;
 
 };
