@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 using namespace std;
+typedef vector<uint8_t> poly;
 
 void compute_syndromes(const vector<uint8_t> r, int num_syndromes, vector<uint8_t>& s) {
     s.resize(num_syndromes);
@@ -19,20 +20,198 @@ void compute_syndromes(const vector<uint8_t> r, int num_syndromes, vector<uint8_
     }
 }
 
-string decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
+// Elimina ceros a la izquierda
+void poly_trim(poly &p) {
+    while (!p.empty() && p.back() == 0) {
+        p.pop_back();
+    }
+}
+
+// Multiplicación de polinomios
+poly poly_mul(const poly &a, const poly &b) {
+    poly result(a.size() + b.size() - 1, 0);
+    for (size_t i = 0; i < a.size(); ++i) {
+        for (size_t j = 0; j < b.size(); ++j) {
+            result[i + j] ^= gfmul(a[i], b[j]);
+        }
+    }
+    poly_trim(result);
+    return result;
+}
+
+// División de polinomios: devuelve cociente y resto
+pair<poly, poly> poly_div(const poly &a, const poly &b) {
+    poly dividend = a;
+    poly divisor = b;
+    poly quotient(dividend.size(), 0);
+
+    poly_trim(dividend);
+    poly_trim(divisor);
+
+    while (dividend.size() >= divisor.size() && !dividend.empty()) {
+        int coef_pos = dividend.size() - 1;
+        int shift = coef_pos - (divisor.size() - 1);
+        uint8_t factor = gfmul(dividend.back(), gfinv(divisor.back()));
+
+        quotient[shift] = factor;
+
+        for (size_t i = 0; i < divisor.size(); ++i) {
+            dividend[shift + i] ^= gfmul(divisor[i], factor);
+        }
+        poly_trim(dividend);
+    }
+
+    poly_trim(quotient);
+    poly_trim(dividend);  // el resto
+    return {quotient, dividend};
+}
+
+// Algoritmo de Euclides extendido para polinomios en GF(2^8)
+// Encuentra el polinomio localizador (sigma) y evaluador (omega)
+void euclid(const poly &a, const poly &b, int max_deg, poly &sigma, poly &omega) {
+    poly r0 = a;
+    poly r1 = b;
+    poly t0 = {0};
+    poly t1 = {1};
+
+    poly_trim(r0);
+    poly_trim(r1);
+
+    // Iterar hasta que deg(r1) < floor(max_deg / 2)
+    while (!r1.empty() && (int)r1.size() - 1 >= max_deg / 2) {
+        // División r0 / r1 → cociente q y resto r
+        pair<poly, poly> div = poly_div(r0, r1);
+        poly q = div.first;
+        poly r = div.second;
+
+        // t = t0 - q * t1
+        poly qt1 = poly_mul(q, t1);
+        if (t0.size() > qt1.size())
+            qt1.resize(t0.size(), 0);
+        for (size_t i = 0; i < t0.size(); ++i) {
+            qt1[i] ^= t0[i];
+        }
+
+        // Avanzar
+        r0 = r1;
+        r1 = r;
+        t0 = t1;
+        t1 = qt1;
+    }
+
+    sigma = t1;
+    omega = r1;
+
+    poly_trim(sigma);
+    poly_trim(omega);
+}
+
+// Debug: imprimir polinomio
+void print_poly(const poly &p, const char *name) {
+    printf("%s(x) = ", name);
+    for (int i = p.size() - 1; i >= 0; --i) {
+        if (p[i] != 0) {
+            printf("%s0x%02X·x^%d ", (i != (int)p.size() - 1 ? "+ " : ""), p[i], i);
+        }
+    }
+    printf("\n");
+}
+
+// Evaluación de un polinomio p(x) en x usando Horner sobre GF(256)
+uint8_t poly_eval(const poly &p, uint8_t x) {
+    uint8_t result = 0;
+    for (int i = p.size() - 1; i >= 0; --i) {
+        result = gfadd(gfmul(result, x), p[i]);
+    }
+    return result;
+}
+
+// Chien Search: devuelve índices de símbolos erróneos en el bloque (del final al principio)
+vector<int> chien_search(const poly &sigma, int n) {
+    vector<int> error_positions;
+
+    for (int i = 0; i < n; ++i) {
+        // Evaluar sigma en α^{-i}
+        uint8_t xi = gfalog[(255-i) % 255];
+        if (poly_eval(sigma, xi) == 0) {
+            // Error en la posición i (del final hacia el principio)
+            error_positions.push_back(n - 1 - i);
+        }
+    }
+
+    return error_positions;
+}
+
+poly poly_deriv(const poly &p) {
+    poly result;
+    for (size_t i = 1; i < p.size(); i += 2) {  // solo grados impares
+        result.push_back(p[i]);
+    }
+    return result;
+}
+
+// Corrige el bloque recibido en las posiciones de error usando Forney
+void forney_correct(vector<uint8_t> &received, const poly &sigma, const poly &omega, const vector<int> &error_positions)
+{
+    poly sigma_deriv = poly_deriv(sigma);
+    int n = received.size();
+
+    for (int j = 0; j < error_positions.size(); ++j) {
+        int pos = error_positions[j];
+        int i = n - 1 - pos;  // i tal que Xj = α^{-i}
+
+        uint8_t x_inv = gfalog[i % 255];           // Xj^{-1} = α^i
+        uint8_t numerator = poly_eval(omega, x_inv);
+        uint8_t denominator = poly_eval(sigma_deriv, x_inv);
+
+        if (denominator == 0) {
+            fprintf(stderr, "Error: división por cero en Forney.\n");
+            continue;
+        }
+
+        uint8_t error_value = gfmul(numerator, gfinv(denominator));
+
+        // Corregir el símbolo en la posición con error
+        received[pos] = gfadd(received[pos], error_value);
+    }
+}
+
+
+vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
     vector<uint8_t> sindromes;
-    compute_syndromes(bloque_con_ruido, 8, sindromes);
+    compute_syndromes(bloque_con_ruido, (N-K), sindromes);
     bool error = false;
-    for (int i=0 ; i<8; i++) {
+    for (int i=0 ; i<(N-K); i++) {
         if (!error && sindromes[i] != 0) {
             error = true;
         }
     }
     if (error) {
-        vector<uint8_t> bloque_decodificado;
+        poly pol_loc_err, pol_ev_err;
+        poly a((N-K), 0); a.back() = 1; // a(x) = x^{d-1}
+        euclid(a, sindromes, sindromes.size() - 1, pol_loc_err, pol_ev_err);
+        vector<int> error_positions = chien_search(pol_loc_err, K);
+        cout << "Se detectaron " << error_positions.size() << " errores\n";
+        for (int i : error_positions) {
+            cout << i << endl;
+        }
+        forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions);  
 
-        return "E";
+
+        bool error2 = false;    
+        vector<uint8_t> sindromes_post;
+
+        compute_syndromes(bloque_con_ruido, N-K, sindromes_post);
+        for (int i=0 ; i<(N-K); i++) {
+        if (!error2 && sindromes_post[i] != 0) {
+            error2 = true;
+        }}
+        if (error2)
+            cout << "No se corrigio" << endl;
+        else 
+            cout << "Se corrigio" << endl;
+    
     }
-    else return "N";
+    return bloque_con_ruido;
 
 };

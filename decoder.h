@@ -5,6 +5,6 @@
 #include <string>
 using namespace std;
 
-string decodificador(vector<uint8_t> bloque_con_ruido, int N, int K);
+vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K);
 
 #endif // DECODER_H

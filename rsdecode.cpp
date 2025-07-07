@@ -22,8 +22,7 @@ bool leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int r
     while (archivo.read(reinterpret_cast<char*>(bloque.data()), tamanio_bloque)) {
         // Procesar bloque individual
         reverse(bloque.begin(), bloque.end());
-        string resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
-        cout << resultado;
+        vector<uint8_t> resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
         bloqueIndex++;
     }
 
