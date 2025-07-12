@@ -9,12 +9,29 @@
 #include <algorithm>
 using namespace std;
 
+void guardar(const vector<uint8_t>& datos, const string& nombre_archivo) {
+    ofstream archivo(nombre_archivo);
+    if (!archivo) {
+        cerr << "Error al abrir el archivo: " << nombre_archivo << endl;
+        return;
+    }
+
+    for (uint8_t byte : datos) {
+        archivo << static_cast<char>(byte);
+    }
+
+    archivo.close();
+}
+
 bool leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia) {
     ifstream archivo(nombreArchivo, ios::binary);
     if (!archivo.is_open()) {
         cerr << "No se pudo abrir el archivo binario: " << nombreArchivo << endl;
         return false;
     }
+    string nombreDestino = nombreArchivo;
+    size_t punto = nombreDestino.rfind('.');
+    nombreDestino = nombreDestino.substr(0, punto) + ".out";
 
     vector<uint8_t> bloque(tamanio_bloque);
     int bloqueIndex = 0;
@@ -23,6 +40,9 @@ bool leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int r
         // Procesar bloque individual
         reverse(bloque.begin(), bloque.end());
         vector<uint8_t> resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
+        reverse(resultado.begin(), resultado.end());
+        resultado.resize(55);
+        guardar(resultado, nombreDestino);
         bloqueIndex++;
     }
 

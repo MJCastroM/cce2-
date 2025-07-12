@@ -1,6 +1,7 @@
 #include "decoder.h"
 #include "gf256.h"
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <algorithm>
 using namespace std;
@@ -148,46 +149,34 @@ poly poly_deriv(const poly &p) {
     for (size_t i = 1; i < p.size(); i += 2) {  // solo grados impares
         result.push_back(p[i]);
     }
+    poly_trim(result);
     return result;
 }
 
 // Corrige el bloque recibido en las posiciones de error usando Forney
-void forney_correct(std::vector<uint8_t> &received, const poly &sigma, const poly &omega, const vector<int> &error_positions) {
+void forney_correct(vector<uint8_t> &received, const poly &sigma, const poly &omega, const vector<int> &error_positions) {
     // Derivada de σ(x)
     poly sigma_deriv = poly_deriv(sigma);
     int n = received.size();  // debería ser 64 para RS(64,56)
-
     for (int pos : error_positions) {
-        // i tal que pos = n-1 - i  ⇒  α^i = X_j^{-1}
-        int i = (n - 1) - pos;
-
         // Definimos X_j = α^{-i} = gfinv( α^i )
-        uint8_t x = (uint8_t)gfinv( gfalog[i % _gf_qm1] );
-
+        uint8_t xj = gfinv(gfalog[pos]);
         // Evaluar Ω(x) y σ'(x)
-        uint8_t numerator   = poly_eval(omega,      x);
-        uint8_t denominator = poly_eval(sigma_deriv, x);
-
+        uint8_t numerator   = poly_eval(omega, xj);
+        uint8_t denominator = poly_eval(sigma_deriv, xj);
         if (denominator == 0) {
-            std::fprintf(stderr,
-                "Forney error: división por cero en pos %d (σ'(x)=0).\n",
-                pos);
+            fprintf(stderr, "Forney error: división por cero en pos %d (σ'(x)=0).\n", pos);
             continue;
         }
-
         // Fórmula de Forney: e_j = Ω(x) / ( X_j·σ'(x) )
-        uint8_t mj = gfmul(
-            numerator,
-            gfinv( gfmul(x, denominator) )
-        );
-
+        uint8_t mj =  gfmul(numerator, gfinv(denominator));
         // Corregir con suma en GF(256) (XOR)
-        received[pos] = (uint8_t)gfadd(received[pos], mj);
+        received[pos] = gfadd(received[pos], mj);
     }
 }
 
 vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
-    print_poly(bloque_con_ruido, "BloqueOriginal");
+    vector<uint8_t> bloque_original = bloque_con_ruido;
     vector<uint8_t> sindromes;
     compute_syndromes(bloque_con_ruido, (N-K), sindromes);
     bool error = false;
@@ -199,25 +188,25 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
     if (error) {
         poly pol_loc_err, pol_ev_err;
         poly a((N-K), 0); a.back() = 1; // a(x) = x^{d-1}
-        print_poly(a, "Polinomio_A");
-        print_poly(sindromes, "Sindromes");
         euclid(a, sindromes, sindromes.size() - 1, pol_loc_err, pol_ev_err);
-        print_poly(pol_loc_err, "pol_loc_err");
-        print_poly(pol_ev_err, "pol_ev_err");
         vector<int> error_positions = chien_search(pol_loc_err, N);
         cout << "Se detectaron " << error_positions.size() << " errores\n";
-        for (int i : error_positions) {
-            cout << i + 1 << endl; // Corrijo posicion con respecto al array
-            error_positions[0] = N - i - 1;
+        for (int i=0; i<error_positions.size(); i++) {
+            error_positions[i] = N - error_positions[i] - 1;
+            cout << error_positions[i] << endl; // Corrijo posicion con respecto al array
         }
-        forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions);  
-        print_poly(bloque_con_ruido, "BloqueCorregido");
-        bloque_con_ruido[22] = 0xF2;
-        print_poly(bloque_con_ruido, "BloqueManual");
+        forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
+        for (int i=0; i<64; i++) { 
+            if(bloque_con_ruido[i] != bloque_original[i]) {
+                cout << i 
+                     << ": Original: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_original[i]
+                     << "  Corregido: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_con_ruido[i]
+                     << dec << endl; 
+            }
+        }
         bool error2 = false;    
         vector<uint8_t> sindromes_post;
         compute_syndromes(bloque_con_ruido, N-K, sindromes_post);
-        print_poly(sindromes_post, "SindromesPost");
         for (int i=0 ; i<(N-K); i++) {
         if (!error2 && sindromes_post[i] != 0) {
             error2 = true;
