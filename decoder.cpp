@@ -93,7 +93,7 @@ void euclid(const poly &a, const poly &b, int max_deg, poly &sigma, poly &omega)
     poly_trim(r1);
 
     // Iterar hasta que deg(r1) < floor(max_deg / 2)
-    while (!r1.empty() && (int)r1.size() - 1 >= max_deg / 2) {
+    while (!r1.empty() && r1.size() - 1 >= max_deg/ 2) {
         // División r0 / r1 → cociente q y resto r
         pair<poly, poly> div = poly_div(r0, r1);
         poly q = div.first;
@@ -103,8 +103,10 @@ void euclid(const poly &a, const poly &b, int max_deg, poly &sigma, poly &omega)
         poly qt1 = poly_mul(q, t1);
         if (t0.size() > qt1.size())
             qt1.resize(t0.size(), 0);
+        else if (qt1.size() > t0.size())
+            t0.resize(qt1.size(), 0);
         for (size_t i = 0; i < t0.size(); ++i) {
-            qt1[i] ^= t0[i];
+            qt1[i] = gfadd(qt1[i],t0[i]);
         }
 
         // Avanzar
@@ -135,10 +137,10 @@ vector<int> chien_search(const poly &sigma, int n) {
     vector<int> error_positions;
     for (int i = 0; i < n; ++i) {
         // Evaluar sigma en α^{-i}
-        uint8_t xi = gfalog[(255-i) % 255];
+        uint8_t xi = gfalog[(255-i)];
         if (poly_eval(sigma, xi) == 0) {
             // Error en la posición i (del final hacia el principio)
-            error_positions.push_back(n - 1 - i);
+            error_positions.push_back(i);
         }
     }
     return error_positions;
@@ -148,6 +150,7 @@ poly poly_deriv(const poly &p) {
     poly result;
     for (size_t i = 1; i < p.size(); i += 2) {  // solo grados impares
         result.push_back(p[i]);
+        result.push_back(0);
     }
     poly_trim(result);
     return result;
@@ -161,6 +164,7 @@ void forney_correct(vector<uint8_t> &received, const poly &sigma, const poly &om
     for (int pos : error_positions) {
         // Definimos X_j = α^{-i} = gfinv( α^i )
         uint8_t xj = gfinv(gfalog[pos]);
+
         // Evaluar Ω(x) y σ'(x)
         uint8_t numerator   = poly_eval(omega, xj);
         uint8_t denominator = poly_eval(sigma_deriv, xj);
@@ -168,7 +172,8 @@ void forney_correct(vector<uint8_t> &received, const poly &sigma, const poly &om
             fprintf(stderr, "Forney error: división por cero en pos %d (σ'(x)=0).\n", pos);
             continue;
         }
-        // Fórmula de Forney: e_j = Ω(x) / ( X_j·σ'(x) )
+        
+        // Fórmula de Forney: e_j = Ω(x) / σ'(x) 
         uint8_t mj =  gfmul(numerator, gfinv(denominator));
         // Corregir con suma en GF(256) (XOR)
         received[pos] = gfadd(received[pos], mj);
@@ -187,16 +192,11 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
     }
     if (error) {
         poly pol_loc_err, pol_ev_err;
-        poly a((N-K), 0); a.back() = 1; // a(x) = x^{d-1}
-        euclid(a, sindromes, sindromes.size() - 1, pol_loc_err, pol_ev_err);
+        poly a((N-K), 0); a.push_back(1); // a(x) = x^{d-1} r = n − k = d − 1)
+        euclid(a, sindromes, N - K, pol_loc_err, pol_ev_err);
         vector<int> error_positions = chien_search(pol_loc_err, N);
-        cout << "Se detectaron " << error_positions.size() << " errores\n";
-        for (int i=0; i<error_positions.size(); i++) {
-            error_positions[i] = N - error_positions[i] - 1;
-            cout << error_positions[i] << endl; // Corrijo posicion con respecto al array
-        }
         forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
-        for (int i=0; i<64; i++) { 
+        for (int i=0; i<N; i++) { 
             if(bloque_con_ruido[i] != bloque_original[i]) {
                 cout << i 
                      << ": Original: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_original[i]
