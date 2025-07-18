@@ -180,7 +180,7 @@ void forney_correct(vector<uint8_t> &received, const poly &sigma, const poly &om
     }
 }
 
-vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
+pair <bool,vector<uint8_t>> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
     vector<uint8_t> bloque_original = bloque_con_ruido;
     vector<uint8_t> sindromes;
     compute_syndromes(bloque_con_ruido, (N-K), sindromes);
@@ -196,30 +196,20 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
         euclid(a, sindromes, N - K, pol_loc_err, pol_ev_err);
         vector<int> error_positions = chien_search(pol_loc_err, N);
         if (pol_loc_err.size() - 1 > error_positions.size()) {
-            cout << "Hay " << pol_loc_err.size() - 1 << " errores y se encontraron "<< error_positions.size()<< " raices" << endl;
-            print_poly(pol_loc_err, "pol_loc_err");
-            print_poly(pol_ev_err, "pol_ev_err");
+           // cout << "Hay mas de 4 errores, no se puede corregir" << endl;
+            return make_pair(error, bloque_con_ruido);
         }
             forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
-         for (int i=0; i<N; i++) { 
+        /* for (int i=0; i<N; i++) { 
             if(bloque_con_ruido[i] != bloque_original[i]) {
                 cout << i 
                      << ": Original: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_original[i]
                      << "  Corregido: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_con_ruido[i]
                      << dec << endl; 
             }
-        }
-        bool error2 = false;    
-        vector<uint8_t> sindromes_post;
-        compute_syndromes(bloque_con_ruido, N-K, sindromes_post);
-        for (int i=0 ; i<(N-K); i++) {
-        if (!error2 && sindromes_post[i] != 0) {
-            error2 = true;
-        }}
-        /*if (error2) cout << 0;
-        else cout << 1;*/
+        }*/
+        
     }
-    
-    return bloque_con_ruido;
+    return make_pair(error, bloque_con_ruido);
 
 };

@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <array>
+#include <tuple>
 #include <algorithm>
 using namespace std;
 
@@ -23,31 +24,40 @@ void guardar(const vector<uint8_t>& datos, const string& nombre_archivo) {
     archivo.close();
 }
 
-bool leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia, string nombreDestino) {
+tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia, string nombreDestino) {
     ifstream archivo(nombreArchivo, ios::binary);
     if (!archivo.is_open()) {
         cerr << "No se pudo abrir el archivo: " << nombreArchivo << endl;
         cout << "Recuerde:" << endl;
         cout << "Uso: rsdecode.exe [m] [r] archivoentrada.ext [archivosalida]" << endl;
-        return false;
+        return make_tuple(0, 0, 0);
     }
 
     vector<uint8_t> bloque(tamanio_bloque);
     int bloqueIndex = 0;
+    int sin_error = 0;
+    int corregidos = 0;
+    int no_corregidos = 0;
 
     while (archivo.read(reinterpret_cast<char*>(bloque.data()), tamanio_bloque)) {
         // Procesar bloque individual
         reverse(bloque.begin(), bloque.end());
-        cout << "Bloque " << bloqueIndex << ":" << endl;
-        vector<uint8_t> resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
-        reverse(resultado.begin(), resultado.end());
-        resultado.resize(55);
-        guardar(resultado, nombreDestino);
+        pair <bool, vector<uint8_t>> resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
+        // Armado de estadisticas
+        if (!resultado.first)     
+            sin_error++;
+        else {if (bloque == resultado.second)
+            no_corregidos++;
+            else corregidos++;}
+
+        reverse(resultado.second.begin(), resultado.second.end());
+        resultado.second.resize(55);
+        guardar(resultado.second, nombreDestino);
         bloqueIndex++;
     }
 
     archivo.close();
-    return true;
+    return make_tuple(sin_error, corregidos, no_corregidos);
 }
 
 int main(int argc, char* argv[]) {
@@ -82,6 +92,9 @@ int main(int argc, char* argv[]) {
     }
     limpiar.close();
     // . Leer archivo con errores
-    leerYProcesarBloques(argv[3], stoi(argv[1]), stoi(argv[2]), nombreDestino);
+    tuple <int, int, int> estadisticas = leerYProcesarBloques(argv[3], stoi(argv[1]), stoi(argv[2]), nombreDestino);
+    cout << "Bloques sin error: " << get<0>(estadisticas) << endl;
+    cout << "Bloques corregidos: " << get<1>(estadisticas) << endl;
+    cout << "Bloques sin corregir: " << get<2>(estadisticas) << endl;
     return 0;
 }
