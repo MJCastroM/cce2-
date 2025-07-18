@@ -195,9 +195,12 @@ vector<uint8_t> decodificador(vector<uint8_t> bloque_con_ruido, int N, int K) {
         poly a((N-K), 0); a.push_back(1); // a(x) = x^{d-1} r = n − k = d − 1)
         euclid(a, sindromes, N - K, pol_loc_err, pol_ev_err);
         vector<int> error_positions = chien_search(pol_loc_err, N);
-        if (pol_loc_err.size() - 1 > error_positions.size())
+        if (pol_loc_err.size() - 1 > error_positions.size()) {
             cout << "Hay " << pol_loc_err.size() - 1 << " errores y se encontraron "<< error_positions.size()<< " raices" << endl;
-        forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
+            print_poly(pol_loc_err, "pol_loc_err");
+            print_poly(pol_ev_err, "pol_ev_err");
+        }
+            forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
          for (int i=0; i<N; i++) { 
             if(bloque_con_ruido[i] != bloque_original[i]) {
                 cout << i 
