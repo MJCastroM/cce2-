@@ -51,7 +51,7 @@ tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int taman
             else corregidos++;}
 
         reverse(resultado.second.begin(), resultado.second.end());
-        resultado.second.resize(55);
+        resultado.second.resize(56);
         guardar(resultado.second, nombreDestino);
         bloqueIndex++;
     }

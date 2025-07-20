@@ -208,7 +208,14 @@ pair <bool,vector<uint8_t>> decodificador(vector<uint8_t> bloque_con_ruido, int 
                      << dec << endl; 
             }
         }*/
-        
+           bool error2 = false;    
+        vector<uint8_t> sindromes_post;
+        compute_syndromes(bloque_con_ruido, N-K, sindromes_post);
+        for (int i=0 ; i<(N-K); i++) {
+        if (!error2 && sindromes_post[i] != 0) {
+            error2 = true;
+        }}
+        if (error2) bloque_con_ruido = bloque_original;
     }
     return make_pair(error, bloque_con_ruido);
 
