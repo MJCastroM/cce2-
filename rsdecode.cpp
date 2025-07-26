@@ -24,12 +24,17 @@ void guardar(const vector<uint8_t>& datos, const string& nombre_archivo) {
     archivo.close();
 }
 
-tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia, string nombreDestino) {
+tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia, const string& nombreDestino) {
     ifstream archivo(nombreArchivo, ios::binary);
     if (!archivo.is_open()) {
         cerr << "No se pudo abrir el archivo: " << nombreArchivo << endl;
-        cout << "Recuerde:" << endl;
-        cout << "Uso: rsdecode.exe [m] [r] archivoentrada.ext [archivosalida]" << endl;
+        cerr << "Uso: rsdecode.exe [m] [r] archivoentrada.ext [archivosalida]" << endl;
+        return make_tuple(0, 0, 0);
+    }
+
+    ofstream salida(nombreDestino, ios::binary | ios::app);
+    if (!salida.is_open()) {
+        cerr << "No se pudo abrir el archivo de salida: " << nombreDestino << endl;
         return make_tuple(0, 0, 0);
     }
 
@@ -38,27 +43,38 @@ tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int taman
     int sin_error = 0;
     int corregidos = 0;
     int no_corregidos = 0;
+    const int datos_utiles = tamanio_bloque - redundancia;
 
     while (archivo.read(reinterpret_cast<char*>(bloque.data()), tamanio_bloque)) {
-        // Procesar bloque individual
-        reverse(bloque.begin(), bloque.end());
-        pair <bool, vector<uint8_t>> resultado = decodificador(bloque, tamanio_bloque, (tamanio_bloque - redundancia));
-        // Armado de estadisticas
-        if (!resultado.first)     
-            sin_error++;
-        else {if (bloque == resultado.second)
-            no_corregidos++;
-            else corregidos++;}
+        // Invertir el bloque (si es necesario)
+        for (int i = 0, j = tamanio_bloque - 1; i < j; i++, j--) {
+            std::swap(bloque[i], bloque[j]);
+        }
 
-        reverse(resultado.second.begin(), resultado.second.end());
-        resultado.second.resize(56);
-        guardar(resultado.second, nombreDestino);
+        auto resultado = decodificador(bloque, tamanio_bloque, datos_utiles);
+
+        // Contabilizar estadísticas
+        if (!resultado.first) {
+            sin_error++;
+        } else if (bloque == resultado.second) {
+            no_corregidos++;
+        } else {
+            corregidos++;
+        }
+
+        // Revertir el bloque corregido (si era necesario)
+        for (int i = 0, j = resultado.second.size() - 1; i < j; i++, j--) {
+            std::swap(resultado.second[i], resultado.second[j]);
+        }
+
+        // Guardar solo los datos útiles (K bytes)
+        salida.write(reinterpret_cast<const char*>(resultado.second.data()), datos_utiles);
         bloqueIndex++;
     }
 
-    archivo.close();
     return make_tuple(sin_error, corregidos, no_corregidos);
 }
+
 
 int main(int argc, char* argv[]) {
     if (argc < 4 || argc > 5) {
