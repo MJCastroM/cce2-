@@ -123,7 +123,6 @@ void euclid(const poly &a, const poly &b, int max_deg, poly &sigma, poly &omega)
     poly_trim(omega);
 }
 
-// Evaluación de un polinomio p(x) en x usando Horner sobre GF(256)
 uint8_t poly_eval(const poly &p, uint8_t x) {
     uint8_t result = 0;
     for (int i = p.size() - 1; i >= 0; --i) {
@@ -132,7 +131,7 @@ uint8_t poly_eval(const poly &p, uint8_t x) {
     return result;
 }
 
-// Chien Search: devuelve índices de símbolos erróneos en el bloque (del final al principio)
+
 vector<int> chien_search(const poly &sigma, int n) {
     vector<int> error_positions;
     for (int i = 0; i < n; ++i) {
@@ -192,22 +191,13 @@ pair <bool,vector<uint8_t>> decodificador(vector<uint8_t> bloque_con_ruido, int 
     }
     if (error) {
         poly pol_loc_err, pol_ev_err;
-        poly a((N-K), 0); a.push_back(1); // a(x) = x^{d-1} r = n − k = d − 1)
+        poly a((N-K), 0); a.push_back(1); 
         euclid(a, sindromes, N - K, pol_loc_err, pol_ev_err);
         vector<int> error_positions = chien_search(pol_loc_err, N);
         if (pol_loc_err.size() - 1 > error_positions.size()) {
-           // cout << "Hay mas de 4 errores, no se puede corregir" << endl;
             return make_pair(error, bloque_con_ruido);
         }
             forney_correct(bloque_con_ruido, pol_loc_err, pol_ev_err, error_positions); 
-        /* for (int i=0; i<N; i++) { 
-            if(bloque_con_ruido[i] != bloque_original[i]) {
-                cout << i 
-                     << ": Original: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_original[i]
-                     << "  Corregido: 0x" << uppercase << hex << setw(2) << setfill('0') << (int)bloque_con_ruido[i]
-                     << dec << endl; 
-            }
-        }*/
            bool error2 = false;    
         vector<uint8_t> sindromes_post;
         compute_syndromes(bloque_con_ruido, N-K, sindromes_post);

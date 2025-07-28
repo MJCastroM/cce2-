@@ -10,20 +10,6 @@
 #include <algorithm>
 using namespace std;
 
-void guardar(const vector<uint8_t>& datos, const string& nombre_archivo) {
-    ofstream archivo(nombre_archivo, ios::app | ios::binary);
-    if (!archivo) {
-        cerr << "Error al abrir el archivo: " << nombre_archivo << endl;
-        return;
-    }
-
-    for (uint8_t byte : datos) {
-        archivo << static_cast<char>(byte);
-    }
-
-    archivo.close();
-}
-
 tuple<int, int, int> leerYProcesarBloques(const string& nombreArchivo, int tamanio_bloque, int redundancia, const string& nombreDestino) {
     ifstream archivo(nombreArchivo, ios::binary);
     if (!archivo.is_open()) {
@@ -107,7 +93,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     limpiar.close();
-    // . Leer archivo con errores
     tuple <int, int, int> estadisticas = leerYProcesarBloques(argv[3], stoi(argv[1]), stoi(argv[2]), nombreDestino);
     cout << "Bloques sin error: " << get<0>(estadisticas) << endl;
     cout << "Bloques corregidos: " << get<1>(estadisticas) << endl;
